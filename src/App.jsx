@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -10,14 +11,15 @@ import {
   Folder,
   FileText,
   LogOut,
+
 } from "lucide-react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import {
   onAuthStateChanged,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signOut,
 } from "firebase/auth";
+
 import { db, auth, googleProvider } from "./firebase";
 
 const monthNames = [
@@ -135,17 +137,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() =>{
-      async function checkRedirectResult(){
-        try{
-          await getRedirectResult(auth);
-        } catch(error){
-          console.error("Error de login:", error);
-        }
-      }
-      checkRedirectResult();
-    }, []);
-
   useEffect(() => {
     if (!user) return;
 
@@ -203,7 +194,7 @@ export default function App() {
       : selectedFolder?.notes.find((note) => note.id === selectedNoteId);
 
   async function loginWithGoogle() {
-    await signInWithRedirect(auth, googleProvider);
+    await signInWithPopup(auth, googleProvider);
   }
 
   async function logout() {
