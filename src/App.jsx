@@ -14,7 +14,8 @@ import {
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import {
   onAuthStateChanged,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
 } from "firebase/auth";
 import { db, auth, googleProvider } from "./firebase";
@@ -132,6 +133,17 @@ export default function App() {
       setIsLoaded(false);
     });
 
+    useEffect(() =>{
+      async function checkRedirectResult(){
+        try{
+          await getRedirectResult(auth);
+        } catch(error){
+          console.error("Error de login:", error);
+        }
+      }
+      checkRedirectResult();
+    }, []);
+
     return () => unsubscribe();
   }, []);
 
@@ -192,7 +204,7 @@ export default function App() {
       : selectedFolder?.notes.find((note) => note.id === selectedNoteId);
 
   async function loginWithGoogle() {
-    await signInWithPopup(auth, googleProvider);
+    await signInWithRedirect(auth, googleProvider);
   }
 
   async function logout() {
