@@ -1,5 +1,4 @@
 import { useMemo, useState, useEffect } from "react";
-
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,7 +10,6 @@ import {
   Folder,
   FileText,
   LogOut,
-
 } from "lucide-react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import {
@@ -19,12 +17,21 @@ import {
   signInWithPopup,
   signOut,
 } from "firebase/auth";
-
 import { db, auth, googleProvider } from "./firebase";
 
 const monthNames = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
 ];
 
 const weekDays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -68,7 +75,9 @@ function getCalendarDays(year, month) {
   const days = [];
 
   for (let i = 0; i < startDay; i++) days.push(null);
-  for (let day = 1; day <= totalDays; day++) days.push(new Date(year, month, day));
+  for (let day = 1; day <= totalDays; day++) {
+    days.push(new Date(year, month, day));
+  }
   while (days.length % 7 !== 0) days.push(null);
 
   return days;
@@ -95,6 +104,64 @@ function createId() {
 
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
+
+const demoData = {
+  events: {
+    [formatDateKey(new Date())]: [
+      {
+        id: "demo-event-1",
+        text: "Revisar calendario semanal",
+        category: "Trabajo",
+        completed: false,
+      },
+      {
+        id: "demo-event-2",
+        text: "Pagar servicio pendiente",
+        category: "Pago",
+        completed: false,
+      },
+    ],
+  },
+  dailyTasks: [
+    {
+      id: "demo-task-1",
+      text: "Explorar la sección de tareas",
+      priority: "Alta",
+      note: "Demo",
+      completed: false,
+    },
+    {
+      id: "demo-task-2",
+      text: "Crear una nota de prueba",
+      priority: "Media",
+      note: "",
+      completed: false,
+    },
+  ],
+  folders: [
+    {
+      id: "demo-folder-1",
+      name: "Universidad",
+      color: "bg-blue-100 border-blue-300 text-blue-900",
+      notes: [
+        {
+          id: "demo-note-1",
+          title: "Apuntes de ejemplo",
+          content: "Aquí puedes guardar apuntes, ideas o información importante.",
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    },
+  ],
+  looseNotes: [
+    {
+      id: "demo-loose-1",
+      title: "Nota rápida",
+      content: "Esta es una nota suelta de ejemplo.",
+      updatedAt: new Date().toISOString(),
+    },
+  ],
+};
 
 export default function App() {
   const today = new Date();
@@ -128,12 +195,27 @@ export default function App() {
   const [newFolderName, setNewFolderName] = useState("");
   const [newNoteTitle, setNewNoteTitle] = useState("");
 
+  const isDemoMode = !user;
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
-      setIsLoaded(false);
+
+      if (!currentUser) {
+        setEvents(demoData.events);
+        setDailyTasks(demoData.dailyTasks);
+        setFolders(demoData.folders);
+        setLooseNotes(demoData.looseNotes);
+        setSelectedFolderId("");
+        setSelectedNoteId("");
+        setSelectedNoteType("");
+        setIsLoaded(true);
+      } else {
+        setIsLoaded(false);
+      }
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -194,7 +276,14 @@ export default function App() {
       : selectedFolder?.notes.find((note) => note.id === selectedNoteId);
 
   async function loginWithGoogle() {
-    await signInWithPopup(auth, googleProvider);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Error al iniciar sesión:", error);
+      alert(
+        "No se pudo iniciar sesión. Abre la app directamente en Safari, Chrome o Firefox, no desde WhatsApp, Instagram o Facebook."
+      );
+    }
   }
 
   async function logout() {
@@ -469,36 +558,7 @@ export default function App() {
   if (authLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
-        Cargando sesión...
-      </main>
-    );
-  }
-
-  if (!user) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
-        <section className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-sm">
-          <div className="mb-4 flex justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white">
-              <CalendarDays className="h-7 w-7" />
-            </div>
-          </div>
-
-          <h1 className="text-3xl font-bold text-slate-900">
-            Planificador personal
-          </h1>
-
-          <p className="mt-3 text-slate-500">
-            Inicia sesión para guardar tus tareas, notas y actividades en tu propia cuenta.
-          </p>
-
-          <button
-            onClick={loginWithGoogle}
-            className="mt-6 w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-700"
-          >
-            Iniciar sesión con Google
-          </button>
-        </section>
+        Cargando aplicación...
       </main>
     );
   }
@@ -522,25 +582,36 @@ export default function App() {
             </h1>
 
             <p className="mt-1 text-sm text-slate-500">
-              Sesión iniciada como {user.displayName || user.email}
+              {isDemoMode
+                ? "Modo demo: los cambios no se guardan."
+                : `Sesión iniciada como ${user.displayName || user.email}`}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             {view === "calendar" && (
               <>
-                <button onClick={goToPreviousMonth} className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100">
+                <button
+                  onClick={goToPreviousMonth}
+                  className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100"
+                >
                   <div className="flex items-center gap-1">
                     <ChevronLeft className="h-4 w-4" />
                     Mes anterior
                   </div>
                 </button>
 
-                <button onClick={goToToday} className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100">
+                <button
+                  onClick={goToToday}
+                  className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100"
+                >
                   Hoy
                 </button>
 
-                <button onClick={goToNextMonth} className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100">
+                <button
+                  onClick={goToNextMonth}
+                  className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100"
+                >
                   <div className="flex items-center gap-1">
                     Mes siguiente
                     <ChevronRight className="h-4 w-4" />
@@ -549,13 +620,22 @@ export default function App() {
               </>
             )}
 
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm shadow-sm hover:bg-slate-100"
-            >
-              <LogOut className="h-4 w-4" />
-              Cerrar sesión
-            </button>
+            {isDemoMode ? (
+              <button
+                onClick={loginWithGoogle}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-700"
+              >
+                Iniciar sesión para guardar
+              </button>
+            ) : (
+              <button
+                onClick={logout}
+                className="flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm shadow-sm hover:bg-slate-100"
+              >
+                <LogOut className="h-4 w-4" />
+                Cerrar sesión
+              </button>
+            )}
           </div>
         </div>
 
@@ -563,7 +643,9 @@ export default function App() {
           <button
             onClick={() => setView("calendar")}
             className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-medium transition ${
-              view === "calendar" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+              view === "calendar"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100"
             }`}
           >
             <CalendarDays className="h-4 w-4" />
@@ -573,7 +655,9 @@ export default function App() {
           <button
             onClick={() => setView("tasks")}
             className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-medium transition ${
-              view === "tasks" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+              view === "tasks"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100"
             }`}
           >
             <ListTodo className="h-4 w-4" />
@@ -583,7 +667,9 @@ export default function App() {
           <button
             onClick={() => setView("notes")}
             className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-medium transition ${
-              view === "notes" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+              view === "notes"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100"
             }`}
           >
             <FileText className="h-4 w-4" />
@@ -665,11 +751,16 @@ export default function App() {
                       <Folder className="h-4 w-4" />
                       <div>
                         <p className="font-medium">{folder.name}</p>
-                        <p className="text-xs text-slate-500">{folder.notes.length} notas</p>
+                        <p className="text-xs text-slate-500">
+                          {folder.notes.length} notas
+                        </p>
                       </div>
                     </button>
 
-                    <button onClick={() => deleteFolder(folder.id)} className="text-slate-400 hover:text-red-600">
+                    <button
+                      onClick={() => deleteFolder(folder.id)}
+                      className="text-slate-400 hover:text-red-600"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -713,7 +804,8 @@ export default function App() {
                   />
 
                   <p className="text-sm text-slate-500">
-                    Última edición: {new Date(selectedNote.updatedAt).toLocaleString()}
+                    Última edición:{" "}
+                    {new Date(selectedNote.updatedAt).toLocaleString()}
                   </p>
                 </div>
               ) : (
@@ -724,7 +816,9 @@ export default function App() {
                         {selectedFolder ? selectedFolder.name : "Notas sueltas"}
                       </h2>
                       <p className="text-sm text-slate-500">
-                        {selectedFolder ? "Notas dentro de esta carpeta." : "Notas rápidas sin carpeta."}
+                        {selectedFolder
+                          ? "Notas dentro de esta carpeta."
+                          : "Notas rápidas sin carpeta."}
                       </p>
                     </div>
 
@@ -764,7 +858,9 @@ export default function App() {
                         >
                           <div className="mb-3 flex items-center gap-2">
                             <FileText className="h-4 w-4 text-slate-500" />
-                            <h3 className="font-semibold">{note.title || "Sin título"}</h3>
+                            <h3 className="font-semibold">
+                              {note.title || "Sin título"}
+                            </h3>
                           </div>
 
                           <p className="line-clamp-3 min-h-16 text-sm text-slate-500">
@@ -810,7 +906,10 @@ export default function App() {
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="font-semibold">Mis tareas</h3>
 
-                  <button onClick={clearCompletedDailyTasks} className="rounded-xl border px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">
+                  <button
+                    onClick={clearCompletedDailyTasks}
+                    className="rounded-xl border px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
+                  >
                     Limpiar terminadas
                   </button>
                 </div>
@@ -821,16 +920,31 @@ export default function App() {
                   </p>
                 ) : (
                   dailyTasks.map((task) => (
-                    <div key={task.id} className="flex items-start gap-3 rounded-xl border p-4">
-                      <input type="checkbox" checked={task.completed} onChange={() => toggleDailyTask(task.id)} />
+                    <div
+                      key={task.id}
+                      className="flex items-start gap-3 rounded-xl border p-4"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={task.completed}
+                        onChange={() => toggleDailyTask(task.id)}
+                      />
 
                       <div className="flex-1">
-                        <p className={`font-medium ${task.completed ? "line-through text-slate-400" : ""}`}>
+                        <p
+                          className={`font-medium ${
+                            task.completed ? "line-through text-slate-400" : ""
+                          }`}
+                        >
                           {task.text}
                         </p>
 
                         <div className="mt-2 flex flex-wrap gap-2">
-                          <span className={`inline-block rounded-full border px-2 py-0.5 text-xs ${priorityColors[task.priority]}`}>
+                          <span
+                            className={`inline-block rounded-full border px-2 py-0.5 text-xs ${
+                              priorityColors[task.priority]
+                            }`}
+                          >
                             Prioridad {task.priority}
                           </span>
 
@@ -842,7 +956,10 @@ export default function App() {
                         </div>
                       </div>
 
-                      <button onClick={() => deleteDailyTask(task.id)} className="text-slate-400 hover:text-red-600">
+                      <button
+                        onClick={() => deleteDailyTask(task.id)}
+                        className="text-slate-400 hover:text-red-600"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -882,7 +999,10 @@ export default function App() {
                   className="w-full rounded-xl border px-4 py-3 outline-none"
                 />
 
-                <button onClick={addDailyTask} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-white hover:bg-slate-700">
+                <button
+                  onClick={addDailyTask}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-white hover:bg-slate-700"
+                >
                   <Plus className="h-4 w-4" />
                   Agregar tarea
                 </button>
@@ -896,7 +1016,9 @@ export default function App() {
                 type="button"
                 onClick={() => setCalendarView("monthly")}
                 className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
-                  calendarView === "monthly" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+                  calendarView === "monthly"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
                 <CalendarDays className="h-4 w-4" />
@@ -907,7 +1029,9 @@ export default function App() {
                 type="button"
                 onClick={() => setCalendarView("weekly")}
                 className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
-                  calendarView === "weekly" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+                  calendarView === "weekly"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
                 <CalendarRange className="h-4 w-4" />
@@ -934,7 +1058,9 @@ export default function App() {
                           disabled={!date}
                           onClick={() => date && selectDate(date)}
                           className={`min-h-28 rounded-2xl border bg-white p-2 text-left transition hover:shadow-md ${
-                            isSelected(date) ? "border-slate-900 ring-2 ring-slate-900" : "border-slate-200"
+                            isSelected(date)
+                              ? "border-slate-900 ring-2 ring-slate-900"
+                              : "border-slate-200"
                           }`}
                         >
                           {date && (
@@ -942,7 +1068,9 @@ export default function App() {
                               <div className="flex items-center justify-between">
                                 <span
                                   className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${
-                                    isToday(date) ? "bg-slate-900 text-white" : "text-slate-700"
+                                    isToday(date)
+                                      ? "bg-slate-900 text-white"
+                                      : "text-slate-700"
                                   }`}
                                 >
                                   {date.getDate()}
@@ -992,7 +1120,9 @@ export default function App() {
                           key={dateKey}
                           onClick={() => selectDate(date)}
                           className={`rounded-2xl border p-4 text-left transition hover:shadow-md ${
-                            selectedDate === dateKey ? "border-slate-900 ring-2 ring-slate-900" : "border-slate-200"
+                            selectedDate === dateKey
+                              ? "border-slate-900 ring-2 ring-slate-900"
+                              : "border-slate-200"
                           }`}
                         >
                           <div className="mb-3 flex items-center justify-between">
@@ -1048,7 +1178,11 @@ export default function App() {
                     className="w-full rounded-xl border px-4 py-3 outline-none"
                   />
 
-                  <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl border px-4 py-3">
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full rounded-xl border px-4 py-3"
+                  >
                     <option>Universidad</option>
                     <option>Trabajo</option>
                     <option>Personal</option>
@@ -1056,7 +1190,10 @@ export default function App() {
                     <option>Salud</option>
                   </select>
 
-                  <button onClick={addEvent} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-white hover:bg-slate-700">
+                  <button
+                    onClick={addEvent}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-white hover:bg-slate-700"
+                  >
                     <Plus className="h-4 w-4" />
                     Agregar actividad
                   </button>
@@ -1071,7 +1208,10 @@ export default function App() {
                     </p>
                   ) : (
                     selectedEvents.map((event) => (
-                      <div key={event.id} className="flex items-start gap-3 rounded-xl border p-3">
+                      <div
+                        key={event.id}
+                        className="flex items-start gap-3 rounded-xl border p-3"
+                      >
                         <input
                           type="checkbox"
                           checked={event.completed}
@@ -1079,16 +1219,27 @@ export default function App() {
                         />
 
                         <div className="flex-1">
-                          <p className={`font-medium ${event.completed ? "line-through text-slate-400" : ""}`}>
+                          <p
+                            className={`font-medium ${
+                              event.completed ? "line-through text-slate-400" : ""
+                            }`}
+                          >
                             {event.text}
                           </p>
 
-                          <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs ${categoryColors[event.category]}`}>
+                          <span
+                            className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs ${
+                              categoryColors[event.category]
+                            }`}
+                          >
                             {event.category}
                           </span>
                         </div>
 
-                        <button onClick={() => deleteEvent(selectedDate, event.id)} className="text-slate-400 hover:text-red-600">
+                        <button
+                          onClick={() => deleteEvent(selectedDate, event.id)}
+                          className="text-slate-400 hover:text-red-600"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
