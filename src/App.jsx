@@ -9,9 +9,15 @@ import {
   ListTodo,
   Folder,
   FileText,
+  LogOut,
 } from "lucide-react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { db } from "./firebase";
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "firebase/auth";
+import { db, auth, googleProvider } from "./firebase";
 
 const monthNames = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -90,6 +96,9 @@ function createId() {
 export default function App() {
   const today = new Date();
 
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [currentDate, setCurrentDate] = useState(
     new Date(today.getFullYear(), today.getMonth(), 1)
   );
@@ -117,27 +126,47 @@ export default function App() {
   const [newNoteTitle, setNewNoteTitle] = useState("");
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(doc(db, "planner", "main"), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-
-        setEvents(data.events || {});
-        setDailyTasks(data.dailyTasks || []);
-        setFolders(data.folders || []);
-        setLooseNotes(data.looseNotes || []);
-      }
-
-      setIsLoaded(true);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+      setIsLoaded(false);
     });
 
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      doc(db, "users", user.uid, "planner", "main"),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+
+          setEvents(data.events || {});
+          setDailyTasks(data.dailyTasks || []);
+          setFolders(data.folders || []);
+          setLooseNotes(data.looseNotes || []);
+        } else {
+          setEvents({});
+          setDailyTasks([]);
+          setFolders([]);
+          setLooseNotes([]);
+        }
+
+        setIsLoaded(true);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!isLoaded || !user) return;
 
     async function saveData() {
-      await setDoc(doc(db, "planner", "main"), {
+      await setDoc(doc(db, "users", user.uid, "planner", "main"), {
         events,
         dailyTasks,
         folders,
@@ -146,7 +175,7 @@ export default function App() {
     }
 
     saveData();
-  }, [events, dailyTasks, folders, looseNotes, isLoaded]);
+  }, [events, dailyTasks, folders, looseNotes, isLoaded, user]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -161,6 +190,14 @@ export default function App() {
     selectedNoteType === "loose"
       ? looseNotes.find((note) => note.id === selectedNoteId)
       : selectedFolder?.notes.find((note) => note.id === selectedNoteId);
+
+  async function loginWithGoogle() {
+    await signInWithPopup(auth, googleProvider);
+  }
+
+  async function logout() {
+    await signOut(auth);
+  }
 
   function goToPreviousMonth() {
     setCurrentDate(new Date(year, month - 1, 1));
@@ -427,6 +464,43 @@ export default function App() {
     setCurrentDate(new Date(date.getFullYear(), date.getMonth(), 1));
   }
 
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
+        Cargando sesión...
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
+        <section className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-sm">
+          <div className="mb-4 flex justify-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white">
+              <CalendarDays className="h-7 w-7" />
+            </div>
+          </div>
+
+          <h1 className="text-3xl font-bold text-slate-900">
+            Planificador personal
+          </h1>
+
+          <p className="mt-3 text-slate-500">
+            Inicia sesión para guardar tus tareas, notas y actividades en tu propia cuenta.
+          </p>
+
+          <button
+            onClick={loginWithGoogle}
+            className="mt-6 w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-700"
+          >
+            Iniciar sesión con Google
+          </button>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-100 p-4 text-slate-900 md:p-8">
       <section className="mx-auto max-w-7xl space-y-6">
@@ -444,29 +518,43 @@ export default function App() {
                 ? "Notas"
                 : `${monthNames[month]} ${year}`}
             </h1>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Sesión iniciada como {user.displayName || user.email}
+            </p>
           </div>
 
-          {view === "calendar" && (
-            <div className="flex flex-wrap gap-2">
-              <button onClick={goToPreviousMonth} className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100">
-                <div className="flex items-center gap-1">
-                  <ChevronLeft className="h-4 w-4" />
-                  Mes anterior
-                </div>
-              </button>
+          <div className="flex flex-wrap gap-2">
+            {view === "calendar" && (
+              <>
+                <button onClick={goToPreviousMonth} className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100">
+                  <div className="flex items-center gap-1">
+                    <ChevronLeft className="h-4 w-4" />
+                    Mes anterior
+                  </div>
+                </button>
 
-              <button onClick={goToToday} className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100">
-                Hoy
-              </button>
+                <button onClick={goToToday} className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100">
+                  Hoy
+                </button>
 
-              <button onClick={goToNextMonth} className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100">
-                <div className="flex items-center gap-1">
-                  Mes siguiente
-                  <ChevronRight className="h-4 w-4" />
-                </div>
-              </button>
-            </div>
-          )}
+                <button onClick={goToNextMonth} className="rounded-xl border bg-white px-4 py-2 shadow-sm hover:bg-slate-100">
+                  <div className="flex items-center gap-1">
+                    Mes siguiente
+                    <ChevronRight className="h-4 w-4" />
+                  </div>
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={logout}
+              className="flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm shadow-sm hover:bg-slate-100"
+            >
+              <LogOut className="h-4 w-4" />
+              Cerrar sesión
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-3 rounded-2xl bg-white p-2 shadow-sm md:grid-cols-3">
@@ -503,7 +591,7 @@ export default function App() {
 
         {!isLoaded ? (
           <div className="rounded-2xl bg-white p-6 text-center text-slate-500 shadow-sm">
-            Cargando actividades...
+            Cargando información...
           </div>
         ) : view === "notes" ? (
           <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
