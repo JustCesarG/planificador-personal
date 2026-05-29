@@ -132,8 +132,10 @@ export default function App() {
       setAuthLoading(false);
       setIsLoaded(false);
     });
+    return () => unsubscribe();
+  }, []);
 
-    useEffect(() =>{
+  useEffect(() =>{
       async function checkRedirectResult(){
         try{
           await getRedirectResult(auth);
@@ -143,9 +145,6 @@ export default function App() {
       }
       checkRedirectResult();
     }, []);
-
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     if (!user) return;
